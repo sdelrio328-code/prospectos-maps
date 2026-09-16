@@ -195,8 +195,11 @@
     <label data-i18n="whatsappNumberLabel"></label>
     <input id="whatsappNumber" type="text" data-i18n-placeholder="whatsappNumberPlaceholder">
     <div class="modal-actions">
-      <button class="secondary" id="whatsappCancel" data-i18n="whatsappCancelBtn"></button>
-      <button class="run" id="whatsappSend" data-i18n="whatsappSendBtn"></button>
+      <button class="secondary" id="whatsappStep1" data-i18n="whatsappStep1Btn"></button>
+      <button class="run" id="whatsappStep2" data-i18n="whatsappStep2Btn" disabled></button>
+    </div>
+    <div class="modal-actions" style="margin-top:8px;">
+      <button class="secondary" id="whatsappCancel" data-i18n="whatsappCancelBtn" style="flex:none; padding-inline:20px;"></button>
     </div>
   </div>
 </div>
@@ -248,13 +251,15 @@ const STR = {
     errTimeout: "Tiempo de espera excedido (10 min).",
     errPrefix: "Error: ",
     whatsappModalTitle: "¿A qué número lo envío?",
-    whatsappModalHint: "Se descarga el Excel y abrimos WhatsApp con ese número — ahí solo adjuntas el archivo que se acaba de descargar.",
+    whatsappModalHint: "Hazlo en dos toques por separado — si los juntas, iPhone cancela la descarga al brincar a WhatsApp.",
     whatsappNumberLabel: "Número de WhatsApp (con lada)",
     whatsappNumberPlaceholder: "ej. 523312345678",
     whatsappCancelBtn: "Cancelar",
-    whatsappSendBtn: "Descargar y abrir WhatsApp",
+    whatsappStep1Btn: "1. Descargar Excel",
+    whatsappStep2Btn: "2. Abrir WhatsApp",
     whatsappMessage: "Aquí tienes tu lista de prospectos generada con Prospectos Maps. Te adjunto el Excel 👇",
-    whatsappHint: "Excel descargado. En WhatsApp, toca 📎 → Documento y selecciona el archivo que se acaba de descargar.",
+    whatsappHint: "Excel descargado. Espera a que termine de guardarse y luego dale a \"2. Abrir WhatsApp\".",
+    whatsappHint2: "En WhatsApp, toca 📎 → Documento y selecciona el archivo que se acaba de descargar.",
     xlsxHeaders: { nombre: 'nombre', categoria: 'categoria', direccion: 'direccion', telefono: 'telefono', whatsapp: 'whatsapp', email: 'email', facebook: 'facebook', instagram: 'instagram', rating: 'rating', resenas: 'resenas', cp: 'cp' }
   },
   en: {
@@ -299,13 +304,15 @@ const STR = {
     errTimeout: "Timeout exceeded (10 min).",
     errPrefix: "Error: ",
     whatsappModalTitle: "Which number should I send it to?",
-    whatsappModalHint: "The Excel file downloads and we open WhatsApp with that number — just attach the file that was just downloaded.",
+    whatsappModalHint: "Do it in two separate taps — doing both at once makes the iPhone cancel the download when it jumps to WhatsApp.",
     whatsappNumberLabel: "WhatsApp number (with country code)",
     whatsappNumberPlaceholder: "e.g. 15551234567",
     whatsappCancelBtn: "Cancel",
-    whatsappSendBtn: "Download and open WhatsApp",
+    whatsappStep1Btn: "1. Download Excel",
+    whatsappStep2Btn: "2. Open WhatsApp",
     whatsappMessage: "Here's your prospect list generated with Prospectos Maps. Attaching the Excel file below 👇",
-    whatsappHint: "Excel downloaded. In WhatsApp, tap 📎 → Document and pick the file you just downloaded.",
+    whatsappHint: "Excel downloaded. Wait for it to finish saving, then tap \"2. Open WhatsApp\".",
+    whatsappHint2: "In WhatsApp, tap 📎 → Document and pick the file you just downloaded.",
     xlsxHeaders: { nombre: 'name', categoria: 'category', direccion: 'address', telefono: 'phone', whatsapp: 'whatsapp', email: 'email', facebook: 'facebook', instagram: 'instagram', rating: 'rating', resenas: 'reviews', cp: 'zip' }
   }
 };
@@ -520,11 +527,14 @@ function toWhatsappDigits(raw) {
 
 const whatsappModal = document.getElementById('whatsappModal');
 const whatsappNumberEl = document.getElementById('whatsappNumber');
+const whatsappStep1 = document.getElementById('whatsappStep1');
+const whatsappStep2 = document.getElementById('whatsappStep2');
 
 function openWhatsappModal() {
   if (!lastRows.length) return;
   const saved = localStorage.getItem('whatsapp_last_number');
   if (saved) whatsappNumberEl.value = saved;
+  whatsappStep2.disabled = true;
   whatsappModal.classList.add('show');
   whatsappNumberEl.focus();
 }
@@ -536,7 +546,7 @@ function closeWhatsappModal() {
 document.getElementById('whatsappCancel').addEventListener('click', closeWhatsappModal);
 whatsappModal.addEventListener('click', (e) => { if (e.target === whatsappModal) closeWhatsappModal(); });
 
-document.getElementById('whatsappSend').addEventListener('click', () => {
+whatsappStep1.addEventListener('click', () => {
   const digits = toWhatsappDigits(whatsappNumberEl.value);
   if (!digits) {
     whatsappNumberEl.focus();
@@ -544,10 +554,17 @@ document.getElementById('whatsappSend').addEventListener('click', () => {
   }
   localStorage.setItem('whatsapp_last_number', whatsappNumberEl.value.trim());
   downloadXlsx();
+  whatsappStep2.disabled = false;
+  setStatus(t('whatsappHint'), 'ok');
+});
+
+whatsappStep2.addEventListener('click', () => {
+  const digits = toWhatsappDigits(whatsappNumberEl.value);
+  if (!digits) return;
   closeWhatsappModal();
   const waUrl = `https://wa.me/${digits}?text=${encodeURIComponent(t('whatsappMessage'))}`;
   window.open(waUrl, '_blank');
-  setStatus(t('whatsappHint'), 'ok');
+  setStatus(t('whatsappHint2'), 'ok');
 });
 
 runBtn.addEventListener('click', runSearch);

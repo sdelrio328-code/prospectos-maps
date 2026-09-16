@@ -190,8 +190,8 @@ const STR = {
     searchSectionTitle: "Búsqueda",
     queryLabel: "Giro / categoría (separa varias con coma)",
     queryPlaceholder: "ej. restaurantes, dentista",
-    postalLabel: "Código postal",
-    postalPlaceholder: "ej. 45020",
+    postalLabel: "Código postal (separa varios con coma)",
+    postalPlaceholder: "ej. 45020, 45030",
     countryLabel: "País (ISO 2 letras)",
     maxPlacesLabel: "Límite de resultados",
     languageLabel: "Idioma",
@@ -217,6 +217,7 @@ const STR = {
     statusRunning: (s, e) => `Corriendo... (${e}s, estado: ${s})`,
     statusDownloading: "Descargando resultados...",
     statusDone: (n) => `Listo: ${n} prospectos encontrados.`,
+    statusCpProgress: (i, n, cp) => `CP ${i}/${n} (${cp})`,
     errMissing: "Falta giro/categoría o código postal.",
     errRunStatus: (s) => `El run terminó con estado: ${s}`,
     errTimeout: "Tiempo de espera excedido (10 min).",
@@ -234,8 +235,8 @@ const STR = {
     searchSectionTitle: "Search",
     queryLabel: "Category (comma-separate for several)",
     queryPlaceholder: "e.g. restaurants, dentist",
-    postalLabel: "ZIP code",
-    postalPlaceholder: "e.g. 45020",
+    postalLabel: "ZIP code (comma-separate for several)",
+    postalPlaceholder: "e.g. 45020, 45030",
     countryLabel: "Country (2-letter ISO)",
     maxPlacesLabel: "Result limit",
     languageLabel: "Language",
@@ -261,6 +262,7 @@ const STR = {
     statusRunning: (s, e) => `Running... (${e}s, status: ${s})`,
     statusDownloading: "Downloading results...",
     statusDone: (n) => `Done: ${n} prospects found.`,
+    statusCpProgress: (i, n, cp) => `ZIP ${i}/${n} (${cp})`,
     errMissing: "Missing category or ZIP code.",
     errRunStatus: (s) => `Run finished with status: ${s}`,
     errTimeout: "Timeout exceeded (10 min).",
@@ -347,6 +349,34 @@ async function apiFetch(url, opts) {
   return res.json();
 }
 
+async function runOnePostalCode(token, baseInput, postalCode, progressLabel) {
+  const input = { ...baseInput, postalCode };
+  const run = await apiFetch(
+    `${API}/acts/${ACTOR}/runs?token=${encodeURIComponent(token)}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
+  );
+  const runId = run.data.id;
+  let status = run.data.status;
+  let datasetId = run.data.defaultDatasetId;
+  let statusMessage = run.data.statusMessage || '';
+  let elapsed = 0;
+
+  while (!['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) {
+    setStatus(`${progressLabel} — ${t('statusRunning', status, elapsed)}`);
+    const check = await apiFetch(`${API}/actor-runs/${runId}?token=${encodeURIComponent(token)}&waitForFinish=15`);
+    status = check.data.status;
+    datasetId = check.data.defaultDatasetId;
+    statusMessage = check.data.statusMessage || statusMessage;
+    elapsed += 15;
+    if (elapsed > 600) throw new Error(t('errTimeout'));
+  }
+
+  if (status !== 'SUCCEEDED') throw new Error(`${progressLabel}: ${t('errRunStatus', status)}${statusMessage ? ' — ' + statusMessage : ''}`);
+
+  setStatus(`${progressLabel} — ${t('statusDownloading')}`);
+  return apiFetch(`${API}/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true&format=json`);
+}
+
 async function runSearch() {
   const token = tokenEl.value.trim();
   if (!token) {
@@ -357,15 +387,14 @@ async function runSearch() {
   tokenMsg.classList.remove('show');
 
   const queryRaw = document.getElementById('query').value.trim();
-  const postalCode = document.getElementById('postalCode').value.trim();
-  if (!queryRaw || !postalCode) {
+  const postalCodes = document.getElementById('postalCode').value.split(',').map(s => s.trim()).filter(Boolean);
+  if (!queryRaw || !postalCodes.length) {
     setStatus(t('errMissing'), 'error');
     return;
   }
 
-  const input = {
+  const baseInput = {
     searchStringsArray: queryRaw.split(',').map(s => s.trim()).filter(Boolean),
-    postalCode: postalCode,
     countryCode: countryEl.value.trim().toLowerCase() || (lang === 'en' ? 'us' : 'mx'),
     maxCrawledPlacesPerSearch: Number(document.getElementById('maxPlaces').value) || 20,
     language: lang,
@@ -377,7 +406,7 @@ async function runSearch() {
   for (const [keyId, valId] of [['custom1Key', 'custom1Val'], ['custom2Key', 'custom2Val']]) {
     const key = document.getElementById(keyId).value.trim();
     const val = document.getElementById(valId).value.trim();
-    if (key && val !== '') input[key] = coerce(val);
+    if (key && val !== '') baseInput[key] = coerce(val);
   }
 
   runBtn.disabled = true;
@@ -385,32 +414,14 @@ async function runSearch() {
   setStatus(t('statusStarting'));
 
   try {
-    const run = await apiFetch(
-      `${API}/acts/${ACTOR}/runs?token=${encodeURIComponent(token)}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
-    );
-    const runId = run.data.id;
-    let status = run.data.status;
-    let datasetId = run.data.defaultDatasetId;
-    let statusMessage = run.data.statusMessage || '';
-    let elapsed = 0;
-
-    while (!['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) {
-      setStatus(t('statusRunning', status, elapsed));
-      const check = await apiFetch(`${API}/actor-runs/${runId}?token=${encodeURIComponent(token)}&waitForFinish=15`);
-      status = check.data.status;
-      datasetId = check.data.defaultDatasetId;
-      statusMessage = check.data.statusMessage || statusMessage;
-      elapsed += 15;
-      if (elapsed > 600) throw new Error(t('errTimeout'));
+    const allItems = [];
+    for (let i = 0; i < postalCodes.length; i++) {
+      const progressLabel = postalCodes.length > 1 ? t('statusCpProgress', i + 1, postalCodes.length, postalCodes[i]) : postalCodes[i];
+      const items = await runOnePostalCode(token, baseInput, postalCodes[i], progressLabel);
+      allItems.push(...items);
     }
 
-    if (status !== 'SUCCEEDED') throw new Error(t('errRunStatus', status) + (statusMessage ? ' — ' + statusMessage : ''));
-
-    setStatus(t('statusDownloading'));
-    const items = await apiFetch(`${API}/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true&format=json`);
-
-    lastRows = items.map(it => ({
+    lastRows = allItems.map(it => ({
       nombre: it.title || '',
       categoria: it.categoryName || '',
       direccion: it.address || '',

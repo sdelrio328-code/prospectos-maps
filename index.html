@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prospectos Maps</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2e38; --text: #e7e9ee;
+    --muted: #9aa1b0; --accent: #4f8cff; --accent-hover: #6ea0ff;
+    --danger: #ff5d5d; --ok: #35c48c; --input-bg: #10131a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 14px; }
+  label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--muted); }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--input-bg); color: var(--text); font-size: 14px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 160px; margin-bottom: 12px; }
+  .field { margin-bottom: 12px; }
+  .token-row { display: flex; gap: 8px; align-items: stretch; }
+  .token-row .field-wrap { position: relative; flex: 1; }
+  .token-row input { padding-right: 38px; }
+  .eye-btn {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; padding: 4px; color: var(--muted);
+  }
+  .eye-btn:hover { color: var(--text); }
+  .clear-btn {
+    background: var(--input-bg); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 0 12px; cursor: pointer; font-size: 13px;
+  }
+  .clear-btn:hover { color: var(--danger); border-color: var(--danger); }
+  .token-msg { color: var(--danger); font-size: 12px; margin-top: 6px; display: none; }
+  .token-msg.show { display: block; }
+  .checks { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
+  .checks label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+  .checks input { width: auto; }
+  .custom-fields .row > div { min-width: 200px; }
+  .hint { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  button.run {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button.run:hover { background: var(--accent-hover); }
+  button.run:disabled { background: #3a3f4b; cursor: not-allowed; }
+  button.secondary {
+    background: var(--input-bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+  button.secondary:hover { border-color: var(--accent); }
+  .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .status.error { color: var(--danger); }
+  .status.ok { color: var(--ok); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+  td a { color: var(--accent); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .table-wrap { overflow-x: auto; max-height: 60vh; overflow-y: auto; }
+  .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+</style>
+<script src="xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Prospectos Maps</h1>
+  <div class="sub" data-i18n="subtitle"></div>
+
+  <div class="panel">
+    <h2 data-i18n="apiSectionTitle"></h2>
+    <div class="token-row">
+      <div class="field-wrap">
+        <input id="token" type="password" data-i18n-placeholder="tokenPlaceholder" autocomplete="off">
+        <button class="eye-btn" id="toggleEye" type="button" data-i18n-title="eyeTitle">👁</button>
+      </div>
+      <button class="clear-btn" id="clearToken" type="button" data-i18n="clearBtn"></button>
+    </div>
+    <div class="token-msg" id="tokenMsg" data-i18n="tokenMsg"></div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="searchSectionTitle"></h2>
+    <div class="row">
+      <div>
+        <label data-i18n="queryLabel"></label>
+        <input id="query" type="text" data-i18n-placeholder="queryPlaceholder">
+      </div>
+      <div>
+        <label data-i18n="postalLabel"></label>
+        <input id="postalCode" type="text" data-i18n-placeholder="postalPlaceholder">
+      </div>
+      <div>
+        <label data-i18n="countryLabel"></label>
+        <input id="countryCode" type="text" value="mx" maxlength="2">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label data-i18n="maxPlacesLabel"></label>
+        <input id="maxPlaces" type="number" value="20" min="1" max="300">
+      </div>
+      <div>
+        <label data-i18n="languageLabel"></label>
+        <select id="language">
+          <option value="es">Español Mexicano</option>
+          <option value="en">English USA</option>
+        </select>
+      </div>
+    </div>
+    <div class="checks">
+      <label><input id="skipClosed" type="checkbox" checked> <span data-i18n="skipClosedLabel"></span></label>
+      <label><input id="detailPage" type="checkbox" checked> <span data-i18n="detailPageLabel"></span></label>
+      <label><input id="contacts" type="checkbox" checked> <span data-i18n="contactsLabel"></span></label>
+    </div>
+  </div>
+
+  <div class="panel custom-fields">
+    <h2 data-i18n="customSectionTitle"></h2>
+    <div class="hint" data-i18n="customHint"></div>
+    <div class="row">
+      <div>
+        <label data-i18n="custom1KeyLabel"></label>
+        <input id="custom1Key" type="text" data-i18n-placeholder="custom1KeyPlaceholder">
+      </div>
+      <div>
+        <label data-i18n="valLabel"></label>
+        <input id="custom1Val" type="text" data-i18n-placeholder="custom1ValPlaceholder">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label data-i18n="custom2KeyLabel"></label>
+        <input id="custom2Key" type="text" data-i18n-placeholder="custom2KeyPlaceholder">
+      </div>
+      <div>
+        <label data-i18n="valLabel"></label>
+        <input id="custom2Val" type="text" data-i18n-placeholder="custom2ValPlaceholder">
+      </div>
+    </div>
+  </div>
+
+  <button class="run" id="runBtn" data-i18n="runBtn"></button>
+  <div class="status" id="status"></div>
+
+  <div class="panel" id="resultsPanel" style="display:none; margin-top:16px;">
+    <div class="results-header">
+      <h2 style="margin:0;" data-i18n="resultsTitle"></h2>
+      <button class="secondary" id="downloadXlsx" data-i18n="downloadXlsx"></button>
+    </div>
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead><tr>
+          <th data-i18n="thNombre"></th><th data-i18n="thCategoria"></th><th data-i18n="thDireccion"></th><th>WhatsApp</th>
+          <th>Email</th><th>Facebook</th><th>Instagram</th><th data-i18n="thRating"></th><th data-i18n="thResenas"></th><th data-i18n="thCp"></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const ACTOR = 'compass~crawler-google-places';
+const API = 'https://api.apify.com/v2';
+
+const STR = {
+  es: {
+    subtitle: "Genera listas de prospectos de negocios desde Google Maps (Apify) por código postal y giro.",
+    apiSectionTitle: "API de Apify",
+    tokenPlaceholder: "Ingresar API personal de Apify",
+    eyeTitle: "Mostrar/ocultar",
+    clearBtn: "Borrar",
+    tokenMsg: "Ingresar API personal de Apify",
+    searchSectionTitle: "Búsqueda",
+    queryLabel: "Giro / categoría (separa varias con coma)",
+    queryPlaceholder: "ej. restaurantes, dentista",
+    postalLabel: "Código postal",
+    postalPlaceholder: "ej. 45020",
+    countryLabel: "País (ISO 2 letras)",
+    maxPlacesLabel: "Límite de resultados",
+    languageLabel: "Idioma",
+    skipClosedLabel: "Omitir cerrados",
+    detailPageLabel: "Detalle por lugar (precio, etc.)",
+    contactsLabel: "Contactos (email/redes)",
+    customSectionTitle: "Campos personalizados (opcional, se agregan tal cual al input del actor)",
+    customHint: 'Nota: el "nombre del campo" debe ser el parámetro exacto que reconoce el actor de Apify (siempre en inglés, como en su documentación) — es un identificador técnico, no texto libre. El "valor" sí puede escribirse en español mexicano cuando el campo lo acepte.',
+    custom1KeyLabel: "Nombre del campo 1",
+    custom1KeyPlaceholder: "ej. número máximo de reseñas a extraer",
+    custom1ValPlaceholder: "ej. 10",
+    custom2KeyLabel: "Nombre del campo 2",
+    custom2KeyPlaceholder: "ej. número máximo de imágenes por lugar",
+    custom2ValPlaceholder: "ej. 5",
+    valLabel: "Valor",
+    runBtn: "Buscar prospectos",
+    resultsTitle: "Resultados",
+    downloadXlsx: "Descargar Excel (.xlsx)",
+    thNombre: "Nombre", thCategoria: "Categoría", thDireccion: "Dirección",
+    thRating: "Rating", thResenas: "Reseñas", thCp: "CP",
+    emptyResults: "Sin resultados.",
+    statusStarting: "Iniciando búsqueda en Apify...",
+    statusRunning: (s, e) => `Corriendo... (${e}s, estado: ${s})`,
+    statusDownloading: "Descargando resultados...",
+    statusDone: (n) => `Listo: ${n} prospectos encontrados.`,
+    errMissing: "Falta giro/categoría o código postal.",
+    errRunStatus: (s) => `El run terminó con estado: ${s}`,
+    errTimeout: "Tiempo de espera excedido (10 min).",
+    errPrefix: "Error: ",
+    xlsxHeaders: { nombre: 'nombre', categoria: 'categoria', direccion: 'direccion', telefono: 'telefono', whatsapp: 'whatsapp', email: 'email', facebook: 'facebook', instagram: 'instagram', rating: 'rating', resenas: 'resenas', cp: 'cp' }
+  },
+  en: {
+    subtitle: "Generate business prospect lists from Google Maps (Apify) by ZIP code and category.",
+    apiSectionTitle: "Apify API",
+    tokenPlaceholder: "Enter your personal Apify API token",
+    eyeTitle: "Show/hide",
+    clearBtn: "Clear",
+    tokenMsg: "Enter your personal Apify API token",
+    searchSectionTitle: "Search",
+    queryLabel: "Category (comma-separate for several)",
+    queryPlaceholder: "e.g. restaurants, dentist",
+    postalLabel: "ZIP code",
+    postalPlaceholder: "e.g. 45020",
+    countryLabel: "Country (2-letter ISO)",
+    maxPlacesLabel: "Result limit",
+    languageLabel: "Language",
+    skipClosedLabel: "Skip closed places",
+    detailPageLabel: "Place detail (price, etc.)",
+    contactsLabel: "Contacts (email/social)",
+    customSectionTitle: "Custom fields (optional, added as-is to the actor's input)",
+    customHint: 'Note: the "field name" must be the exact parameter recognized by the Apify actor (always in English, as in its docs) — it\'s a technical identifier, not free text. The "value" can be plain text when the field accepts it.',
+    custom1KeyLabel: "Field name 1",
+    custom1KeyPlaceholder: "e.g. maxReviews (max reviews to extract)",
+    custom1ValPlaceholder: "e.g. 10",
+    custom2KeyLabel: "Field name 2",
+    custom2KeyPlaceholder: "e.g. maxImages (max images per place)",
+    custom2ValPlaceholder: "e.g. 5",
+    valLabel: "Value",
+    runBtn: "Search prospects",
+    resultsTitle: "Results",
+    downloadXlsx: "Download Excel (.xlsx)",
+    thNombre: "Name", thCategoria: "Category", thDireccion: "Address",
+    thRating: "Rating", thResenas: "Reviews", thCp: "ZIP",
+    emptyResults: "No results.",
+    statusStarting: "Starting search on Apify...",
+    statusRunning: (s, e) => `Running... (${e}s, status: ${s})`,
+    statusDownloading: "Downloading results...",
+    statusDone: (n) => `Done: ${n} prospects found.`,
+    errMissing: "Missing category or ZIP code.",
+    errRunStatus: (s) => `Run finished with status: ${s}`,
+    errTimeout: "Timeout exceeded (10 min).",
+    errPrefix: "Error: ",
+    xlsxHeaders: { nombre: 'name', categoria: 'category', direccion: 'address', telefono: 'phone', whatsapp: 'whatsapp', email: 'email', facebook: 'facebook', instagram: 'instagram', rating: 'rating', resenas: 'reviews', cp: 'zip' }
+  }
+};
+
+let lang = 'es'; // Español Mexicano siempre es el idioma inicial al abrir la app
+
+function t(key, ...args) {
+  const v = STR[lang][key];
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  languageEl.value = lang;
+}
+
+const tokenEl = document.getElementById('token');
+const tokenMsg = document.getElementById('tokenMsg');
+const statusEl = document.getElementById('status');
+const runBtn = document.getElementById('runBtn');
+const resultsPanel = document.getElementById('resultsPanel');
+const resultsBody = document.querySelector('#resultsTable tbody');
+const languageEl = document.getElementById('language');
+const countryEl = document.getElementById('countryCode');
+
+let lastRows = [];
+
+applyLang();
+
+languageEl.addEventListener('change', () => {
+  lang = languageEl.value; // cambio válido solo durante esta sesión; al reabrir la app vuelve a Español Mexicano
+  countryEl.value = lang === 'en' ? 'us' : 'mx';
+  applyLang();
+});
+
+// --- token persistence ---
+const savedToken = localStorage.getItem('apify_token');
+if (savedToken) tokenEl.value = savedToken;
+tokenEl.addEventListener('input', () => {
+  localStorage.setItem('apify_token', tokenEl.value);
+  if (tokenEl.value.trim()) tokenMsg.classList.remove('show');
+});
+
+document.getElementById('toggleEye').addEventListener('click', () => {
+  tokenEl.type = tokenEl.type === 'password' ? 'text' : 'password';
+});
+
+document.getElementById('clearToken').addEventListener('click', () => {
+  tokenEl.value = '';
+  localStorage.removeItem('apify_token');
+  tokenEl.focus();
+});
+
+function setStatus(msg, kind) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function toWhatsapp(phone) {
+  const digits = (phone || '').replace(/[^\d]/g, '');
+  return digits ? 'https://wa.me/' + digits : '';
+}
+
+function coerce(v) {
+  if (v === '') return undefined;
+  try { return JSON.parse(v); } catch (e) { return v; }
+}
+
+async function apiFetch(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) {}
+    throw new Error('HTTP ' + res.status + (detail ? ': ' + detail : ''));
+  }
+  return res.json();
+}
+
+async function runSearch() {
+  const token = tokenEl.value.trim();
+  if (!token) {
+    tokenMsg.classList.add('show');
+    tokenEl.focus();
+    return;
+  }
+  tokenMsg.classList.remove('show');
+
+  const queryRaw = document.getElementById('query').value.trim();
+  const postalCode = document.getElementById('postalCode').value.trim();
+  if (!queryRaw || !postalCode) {
+    setStatus(t('errMissing'), 'error');
+    return;
+  }
+
+  const input = {
+    searchStringsArray: queryRaw.split(',').map(s => s.trim()).filter(Boolean),
+    postalCode: postalCode,
+    countryCode: countryEl.value.trim().toLowerCase() || (lang === 'en' ? 'us' : 'mx'),
+    maxCrawledPlacesPerSearch: Number(document.getElementById('maxPlaces').value) || 20,
+    language: lang,
+    skipClosedPlaces: document.getElementById('skipClosed').checked,
+    scrapePlaceDetailPage: document.getElementById('detailPage').checked,
+    scrapeContacts: document.getElementById('contacts').checked
+  };
+
+  for (const [keyId, valId] of [['custom1Key', 'custom1Val'], ['custom2Key', 'custom2Val']]) {
+    const key = document.getElementById(keyId).value.trim();
+    const val = document.getElementById(valId).value.trim();
+    if (key && val !== '') input[key] = coerce(val);
+  }
+
+  runBtn.disabled = true;
+  resultsPanel.style.display = 'none';
+  setStatus(t('statusStarting'));
+
+  try {
+    const run = await apiFetch(
+      `${API}/acts/${ACTOR}/runs?token=${encodeURIComponent(token)}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
+    );
+    const runId = run.data.id;
+    let status = run.data.status;
+    let datasetId = run.data.defaultDatasetId;
+    let elapsed = 0;
+
+    while (!['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) {
+      setStatus(t('statusRunning', status, elapsed));
+      const check = await apiFetch(`${API}/actor-runs/${runId}?token=${encodeURIComponent(token)}&waitForFinish=15`);
+      status = check.data.status;
+      datasetId = check.data.defaultDatasetId;
+      elapsed += 15;
+      if (elapsed > 600) throw new Error(t('errTimeout'));
+    }
+
+    if (status !== 'SUCCEEDED') throw new Error(t('errRunStatus', status));
+
+    setStatus(t('statusDownloading'));
+    const items = await apiFetch(`${API}/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true&format=json`);
+
+    lastRows = items.map(it => ({
+      nombre: it.title || '',
+      categoria: it.categoryName || '',
+      direccion: it.address || '',
+      telefono: it.phone || '',
+      whatsapp: toWhatsapp(it.phone),
+      email: (it.emails && it.emails[0]) || '',
+      facebook: (it.facebooks && it.facebooks[0]) || '',
+      instagram: (it.instagrams && it.instagrams[0]) || '',
+      rating: it.totalScore ?? '',
+      resenas: it.reviewsCount ?? '',
+      cp: it.postalCode || ''
+    }));
+
+    renderTable(lastRows);
+    setStatus(t('statusDone', lastRows.length), 'ok');
+  } catch (err) {
+    setStatus(t('errPrefix') + err.message, 'error');
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+function renderTable(rows) {
+  resultsBody.innerHTML = '';
+  if (!rows.length) {
+    resultsPanel.style.display = 'block';
+    resultsBody.innerHTML = `<tr><td colspan="10" class="empty">${t('emptyResults')}</td></tr>`;
+    return;
+  }
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(r.nombre)}</td>
+      <td>${esc(r.categoria)}</td>
+      <td>${esc(r.direccion)}</td>
+      <td>${r.whatsapp ? `<a href="${r.whatsapp}" target="_blank">${esc(r.telefono)}</a>` : esc(r.telefono)}</td>
+      <td>${esc(r.email)}</td>
+      <td>${r.facebook ? `<a href="${esc(r.facebook)}" target="_blank">FB</a>` : ''}</td>
+      <td>${r.instagram ? `<a href="${esc(r.instagram)}" target="_blank">IG</a>` : ''}</td>
+      <td>${esc(String(r.rating))}</td>
+      <td>${esc(String(r.resenas))}</td>
+      <td>${esc(r.cp)}</td>`;
+    resultsBody.appendChild(tr);
+  }
+  resultsPanel.style.display = 'block';
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s ?? '';
+  return d.innerHTML;
+}
+
+function downloadXlsx() {
+  if (!lastRows.length) return;
+  const keys = ['nombre', 'categoria', 'direccion', 'telefono', 'whatsapp', 'email', 'facebook', 'instagram', 'rating', 'resenas', 'cp'];
+  const headerLabels = STR[lang].xlsxHeaders;
+  const rows = [keys.map(k => headerLabels[k])];
+  for (const r of lastRows) rows.push(keys.map(k => r[k] ?? ''));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Prospectos');
+  XLSX.writeFile(wb, `prospectos_${document.getElementById('postalCode').value.trim() || 'export'}.xlsx`);
+}
+
+runBtn.addEventListener('click', runSearch);
+document.getElementById('downloadXlsx').addEventListener('click', downloadXlsx);
+</script>
+</body>
+</html>

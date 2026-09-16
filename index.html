@@ -392,6 +392,7 @@ async function runSearch() {
     const runId = run.data.id;
     let status = run.data.status;
     let datasetId = run.data.defaultDatasetId;
+    let statusMessage = run.data.statusMessage || '';
     let elapsed = 0;
 
     while (!['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) {
@@ -399,11 +400,12 @@ async function runSearch() {
       const check = await apiFetch(`${API}/actor-runs/${runId}?token=${encodeURIComponent(token)}&waitForFinish=15`);
       status = check.data.status;
       datasetId = check.data.defaultDatasetId;
+      statusMessage = check.data.statusMessage || statusMessage;
       elapsed += 15;
       if (elapsed > 600) throw new Error(t('errTimeout'));
     }
 
-    if (status !== 'SUCCEEDED') throw new Error(t('errRunStatus', status));
+    if (status !== 'SUCCEEDED') throw new Error(t('errRunStatus', status) + (statusMessage ? ' — ' + statusMessage : ''));
 
     setStatus(t('statusDownloading'));
     const items = await apiFetch(`${API}/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&clean=true&format=json`);

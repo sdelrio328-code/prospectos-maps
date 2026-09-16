@@ -74,6 +74,19 @@
   .table-wrap { overflow-x: auto; max-height: 60vh; overflow-y: auto; }
   .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    align-items: center; justify-content: center; padding: 16px; z-index: 100;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; max-width: 360px; width: 100%;
+  }
+  .modal-box h3 { margin: 0 0 6px; font-size: 16px; }
+  .modal-box p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .modal-actions button { flex: 1; }
 </style>
 <script src="xlsx.full.min.js"></script>
 </head>
@@ -175,6 +188,19 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="whatsappModal">
+  <div class="modal-box">
+    <h3 data-i18n="whatsappModalTitle"></h3>
+    <p data-i18n="whatsappModalHint"></p>
+    <label data-i18n="whatsappNumberLabel"></label>
+    <input id="whatsappNumber" type="text" data-i18n-placeholder="whatsappNumberPlaceholder">
+    <div class="modal-actions">
+      <button class="secondary" id="whatsappCancel" data-i18n="whatsappCancelBtn"></button>
+      <button class="run" id="whatsappSend" data-i18n="whatsappSendBtn"></button>
+    </div>
+  </div>
+</div>
+
 <script>
 const ACTOR = 'compass~crawler-google-places';
 const API = 'https://api.apify.com/v2';
@@ -221,6 +247,14 @@ const STR = {
     errRunStatus: (s) => `El run terminó con estado: ${s}`,
     errTimeout: "Tiempo de espera excedido (10 min).",
     errPrefix: "Error: ",
+    whatsappModalTitle: "¿A qué número lo envío?",
+    whatsappModalHint: "Se descarga el Excel y abrimos WhatsApp con ese número — ahí solo adjuntas el archivo que se acaba de descargar.",
+    whatsappNumberLabel: "Número de WhatsApp (con lada)",
+    whatsappNumberPlaceholder: "ej. 523312345678",
+    whatsappCancelBtn: "Cancelar",
+    whatsappSendBtn: "Descargar y abrir WhatsApp",
+    whatsappMessage: "Aquí tienes tu lista de prospectos generada con Prospectos Maps. Te adjunto el Excel 👇",
+    whatsappHint: "Excel descargado. En WhatsApp, toca 📎 → Documento y selecciona el archivo que se acaba de descargar.",
     xlsxHeaders: { nombre: 'nombre', categoria: 'categoria', direccion: 'direccion', telefono: 'telefono', whatsapp: 'whatsapp', email: 'email', facebook: 'facebook', instagram: 'instagram', rating: 'rating', resenas: 'resenas', cp: 'cp' }
   },
   en: {
@@ -264,6 +298,14 @@ const STR = {
     errRunStatus: (s) => `Run finished with status: ${s}`,
     errTimeout: "Timeout exceeded (10 min).",
     errPrefix: "Error: ",
+    whatsappModalTitle: "Which number should I send it to?",
+    whatsappModalHint: "The Excel file downloads and we open WhatsApp with that number — just attach the file that was just downloaded.",
+    whatsappNumberLabel: "WhatsApp number (with country code)",
+    whatsappNumberPlaceholder: "e.g. 15551234567",
+    whatsappCancelBtn: "Cancel",
+    whatsappSendBtn: "Download and open WhatsApp",
+    whatsappMessage: "Here's your prospect list generated with Prospectos Maps. Attaching the Excel file below 👇",
+    whatsappHint: "Excel downloaded. In WhatsApp, tap 📎 → Document and pick the file you just downloaded.",
     xlsxHeaders: { nombre: 'name', categoria: 'category', direccion: 'address', telefono: 'phone', whatsapp: 'whatsapp', email: 'email', facebook: 'facebook', instagram: 'instagram', rating: 'rating', resenas: 'reviews', cp: 'zip' }
   }
 };
@@ -472,8 +514,44 @@ function downloadXlsx() {
   XLSX.writeFile(wb, `prospectos_${document.getElementById('postalCode').value.trim() || 'export'}.xlsx`);
 }
 
+function toWhatsappDigits(raw) {
+  return (raw || '').replace(/[^\d]/g, '');
+}
+
+const whatsappModal = document.getElementById('whatsappModal');
+const whatsappNumberEl = document.getElementById('whatsappNumber');
+
+function openWhatsappModal() {
+  if (!lastRows.length) return;
+  const saved = localStorage.getItem('whatsapp_last_number');
+  if (saved) whatsappNumberEl.value = saved;
+  whatsappModal.classList.add('show');
+  whatsappNumberEl.focus();
+}
+
+function closeWhatsappModal() {
+  whatsappModal.classList.remove('show');
+}
+
+document.getElementById('whatsappCancel').addEventListener('click', closeWhatsappModal);
+whatsappModal.addEventListener('click', (e) => { if (e.target === whatsappModal) closeWhatsappModal(); });
+
+document.getElementById('whatsappSend').addEventListener('click', () => {
+  const digits = toWhatsappDigits(whatsappNumberEl.value);
+  if (!digits) {
+    whatsappNumberEl.focus();
+    return;
+  }
+  localStorage.setItem('whatsapp_last_number', whatsappNumberEl.value.trim());
+  downloadXlsx();
+  closeWhatsappModal();
+  const waUrl = `https://wa.me/${digits}?text=${encodeURIComponent(t('whatsappMessage'))}`;
+  window.open(waUrl, '_blank');
+  setStatus(t('whatsappHint'), 'ok');
+});
+
 runBtn.addEventListener('click', runSearch);
-document.getElementById('downloadXlsx').addEventListener('click', downloadXlsx);
+document.getElementById('downloadXlsx').addEventListener('click', openWhatsappModal);
 </script>
 </body>
 </html>

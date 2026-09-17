@@ -482,6 +482,7 @@ function downloadXlsx() {
   const rows = [keys.map(k => headerLabels[k])];
   for (const r of lastRows) rows.push(keys.map(k => r[k] ?? ''));
   const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [38, 23, 65, 15, 26, 26, 26, 26, 8, 8, 8].map(wch => ({ wch }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Prospectos');
   XLSX.writeFile(wb, `prospectos_${document.getElementById('postalCode').value.trim() || 'export'}.xlsx`);
